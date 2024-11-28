@@ -1,0 +1,26 @@
+pod创建过程
+
+1、用户提交创建POD请求。
+2、API Server 处理用户请求，存储Pod数据到Etcd。
+3、Schedule通过和 API Server的监听机制，查看到新的pod，尝试为Pod绑定Node。
+4、过滤主机：调度器用一组规则过滤掉不符合要求的主机，比如Pod指定了所需要的资源，那么就要过滤掉资源不够的主机。
+5、主机打分：对第一步筛选出的符合要求的主机进行打分，在此阶段，调度器会考虑一些整体优化策略，比如把一个Replication Controller的副本分布到不同的主机上，使用最低负载的主机等。
+6、选择主机：选择得分最高的主机，进行binding操作，结果存储到Etcd中。
+7、kubelet根据调度结果执行Pod创建操作：绑定成功后，会启动container, Docker run, scheduler会调用API Server的API在etcd中创建一个bound pod对象，描述在一个工作节点上绑定运行的所有pod信息。运行在每个工作节点上的kubelet也会定期与etcd同步bound pod信息，一旦发现应该在该工作节点上运行的bound pod对象没有更新，则调用Docker API创建并启动pod内的容器。
+8、POD创建完成。
+
+ 
+
+执行kubelet工作流程
+
+1.运维人员向kube-apiserver发出指令（我想干什么，我期望事情是什么状态）
+2.api响应命令,通过一系列认证授权,把pod数据存储到etcd,创建deployment资源并初始化。(期望状态）
+3.controller通过list-watch机制,监测发现新的deployment,将该资源加入到内部工作队列,发现该资源没有关联的pod和replicaset,启用deployment controller创建replicaset资源,再启用replicaset controller创建pod。
+4.所有controller被创建完成后.将deployment,replicaset,pod资源更新存储到etcd。
+5.scheduler通过list-watch机制,监测发现新的pod,经过主机过滤、主机打分规则,将pod绑定(binding)到合适的主机。
+6.将绑定结果存储到etcd。
+7.kubelet每隔 20s(可以自定义)向apiserver通过NodeName 获取自身Node上所要运行的pod清单.通过与自己的内部缓存进行比较,新增加pod。
+8.kubelet创建pod。
+9.kube-proxy为新创建的pod注册动态DNS到CoreOS。给pod的service添加iptables/ipvs规则，用于服务发现和负载均衡。
+10.controller通过control loop（控制循环）将当前pod状态与用户所期望的状态做对比，如果当前状态与用户期望状态不同，则controller会将pod修改为用户期望状态，实在不行会将此pod删掉，然后重新创建pod
+
