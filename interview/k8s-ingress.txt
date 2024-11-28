@@ -1,0 +1,47 @@
+二，Ingress-Controller介绍
+Ingress Controller 是 Kubernetes 集群中的一个组件，是一个七层的负载均衡调度器，它负责实现 Ingress 资源对象中定义的路由规则。
+
+Ingress Controller 的具体实现可以多种多样，包括但不限于 Nginx、HAProxy、Traefik、Istio 等。每种 Ingress Controller 都有其独特的特性和优势，但它们的共同目标都是根据 Ingress 资源中的定义来管理外部到集群内部服务的 HTTP(S) 流量。
+
+三，Ingress和Ingress Controller
+1，共同作用
+Ingress Controller结合Ingress 定义的规则生成配置，然后动态更新ingress-controller里的Nginx 或者trafik负载均衡器，并刷新使配置生效，来达到服务自动发现的作用。
+Ingress 则是定义规则，通过它定义某个域名的请求过来之后转发到集群中指定的 Service。它可以通过 Yaml 文件定义，可以给一个或多个 Service 定义一个或多个 Ingress 规则。
+
+2，使用Ingress Controller代理步骤
+（1）部署Ingress controller（以nginx为例部署）。
+（2）创建Pod应用，可以通过控制器（Deployment，Statefulset等）创建pod。
+（3）创建Service，用selector来分组pod。
+（4）创建Ingress http/https，测试通过 http/https 访问应用。
+
+
+先来个 一句话总结 ：Ingress由Ingress规则、IngressController、IngressClass这3部分组成。Ingress资源只是一系列路由转发配置，必须使用IngressController才能让路由规则生效，而IngressClass是IngressController的具体实现。 使用原则 ：先部署IngressController → 再部署Ingress资源。
+
+1、理论
+1.1、Ingress的概念
+没有Ingress之前，可以通过Service的nodePort对外暴露服务，将容器端口与Service的nodePort端口做映射，这样访问集群中任意一台Node的IP:nodePort就能访问到集群内部。Service 的这种暴露服务的形式是工作在TCP/IP层。或者将Pod的端口与HostPort做映射。
+
+但是这样做弊端较多，比如暴露了太多的Node端口、无法做域名转发等。
+
+所以引入了Ingress的概念，Ingress是一个七层路由转发器，类似于Nginx。使用Ingress进行路由转发时，ingressController会基于ingress规则将客户端请求直接转发到Service对应的Pod上，这样会跳过 kube-proxy 设置的路由转发规则，可以提高网络转发效率。
+
+1.2、Ingress的组成
+Ingress资源是一种虚拟的资源和规则定义，需要配合ingressController才能生效。所以要让Ingress资源工作，集群必须有一个正在运行的ingressController。
+
+Ingress由Ingress规则、IngressController、IngressClass这3部分组成。Ingress规则只是一系列的配置，必须使用IngressController才能使其生效，而IngressClass是IngressController的具体实现。关系如下图：
+
+
+1.3、Ingress的功能和工作流程
+ingressController的实现有多种，比如有Ingress-Nginx、Traefik、Kong Ingress等，所以需要在Yaml编排文件中指定ingressClass。
+
+一旦Ingress资源成功部署创建，IngressController就会监控到其配置的路由策略，并更新到Nginx的配置文件中生效。
+
+综上，IngressController 的功能如下：
+
+接受外部的流量，并将请求负载均衡到内部运行的 pod上
+部署Ingress路由转发规则
+监控Kubernetes中运行的Pod，并在添加或删除Pod后自动更新负载均衡规则
+Ingress的工作流程，如下图：
+
+3、总结
+一句话总结 ：Ingress由Ingress规则、IngressController、IngressClass这3部分组成。Ingress资源只是一系列路由转发配置，必须使用IngressController才能让路由规则生效，而IngressClass是IngressController的具体实现。 使用原则 ：先部署IngressController → 再部署Ingress资源。
