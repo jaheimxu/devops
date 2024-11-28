@@ -1,1 +1,82 @@
+Kubernetes中网络通信可以分为Pod-to-Pod通信、Pod-to-Service通信以及Ingress通信（从外部流量到集群内部）。
+
+2.1 Pod-to-Pod通信
+同节点通信：
+同一节点上的Pod通过veth pair和网桥直接通信。
+
+每个Pod都有一个veth接口，该接口一端连接Pod网络命名空间，另一端连接到主机网络。
+
+本地通信直接通过网桥转发，延迟低。
+
+跨节点通信：
+不同节点上的Pod之间通信通常由CNI插件处理，通过路由规则或封装技术（如VXLAN）实现。
+
+通信的具体实现取决于使用的CNI插件： 
+
+路由模式（如Calico）：通过BGP协议传播路由信息，跨节点直接路由。
+
+Overlay模式（如Flannel VXLAN）：跨节点流量通过封装方式在底层网络上传输。
+
+2.2 Pod-to-Service通信
+在Kubernetes中，Pod访问Service的流量主要通过Kube-Proxy来处理。
+
+Kube-Proxy机制：
+Kube-Proxy在每个节点上运行，使用iptables或IPVS规则拦截到达Service的流量。
+
+Kube-Proxy会为每个Service维护一组负载均衡规则，以分发请求到实际的后端Pod。
+
+3. Kube-Proxy深入解析
+Kube-Proxy在Kubernetes集群中的主要作用是管理Service的负载均衡。Kube-Proxy有三种工作模式：User-Space模式、iptables模式和IPVS模式。
+
+3.1 User-Space模式
+工作原理：请求首先进入Kube-Proxy的用户空间进程，然后再转发到后端Pod。
+
+性能缺陷：性能较低，逐渐被弃用。
+
+3.2 iptables模式
+工作原理：Kube-Proxy利用iptables规则将请求直接转发到后端Pod，不需要进入用户空间。
+
+特点：性能相对较好，Kubernetes默认使用的模式。
+
+3.3 IPVS模式
+工作原理：基于Linux内核的IPVS模块进行负载均衡。
+
+优势：IPVS支持更多负载均衡算法，性能更优。
+
+适用场景：适合大规模集群或高并发流量场景。
+
+
+4. CNI插件原理与实现
+Kubernetes本身并不负责创建网络，它依赖CNI插件为Pod分配IP、配置路由。以下是几种常用CNI插件的工作原理：
+
+4.1 Flannel
+特点：Flannel提供简单的Overlay网络，适合小规模集群。
+
+常用模式：
+
+VXLAN：默认模式，使用UDP封装数据包。
+
+Host-GW：适用于裸机集群，不使用封装，性能更高。
+
+4.2 Calico
+特点：基于路由的网络方案，不使用封装，性能较好。
+
+路由模式：Calico的每个节点相当于一个BGP路由器，通过BGP协议发布路由。
+
+网络策略：支持复杂的NetworkPolicy规则，适用于需要网络隔离的场景。
+
+
+外部流量接入：Ingress与负载均衡
+Kubernetes集群内的Service默认无法被外部直接访问，可以通过NodePort和LoadBalancer类型的Service将流量引入集群，不过这种是四层代理，在生产环境，一般使用Ingress，使用七层代理方式将流量引入集群，Ingress提供了一种在集群外部公开服务的途径。
+
+6.1 Ingress架构
+Ingress资源：定义访问路径、域名和目标Service之间的映射关系。
+
+Ingress控制器：负责管理外部流量，解析Ingress资源并处理HTTP/HTTPS请求。
+
+6.2 Ingress的工作流程
+用户通过指定的域名发起请求。
+Ingress控制器根据请求的域名和路径，将请求转发到相应的Service。
+Service负载均衡至具体的Pod。
+
 
