@@ -1,0 +1,182 @@
+kube-scheduler调度介绍
+kube-scheduler是Kubernetes 集群的默认调度器，并且是集群控制面(master)的一部分。对每一个新创建的Pod或者是未被调度的Pod，kube-scheduler会选择一个最优的Node去运行这个Pod。
+
+然而，Pod内的每一个容器对资源都有不同的需求，而且Pod本身也有不同的资源需求。因此，Pod在被调度到Node上之前，根据这些特定的资源调度需求，需要对集群中的Node进行一次过滤。
+
+在一个集群中，满足一个Pod调度请求的所有Node称之为可调度节点。如果没有任何一个Node能满足Pod的资源请求，那么这个Pod将一直停留在未调度状态直到调度器能够找到合适的Node。
+
+调度器先在集群中找到一个Pod的所有可调度节点，然后根据一系列函数对这些可调度节点打分，然后选出其中得分最高的Node来运行Pod。之后，调度器将这个调度决定通知给kube-apiserver，这个过程叫做绑定。
+
+在做调度决定是需要考虑的因素包括：单独和整体的资源请求、硬件/软件/策略限制、亲和以及反亲和要求、数据局域性、负载间的干扰等等。
+
+kube-scheduler 调度流程
+kube-scheduler 给一个 pod 做调度选择包含两个步骤：
+
+1.过滤（Predicates 预选策略）2.打分（Priorities 优选策略）
+
+过滤阶段：过滤阶段会将所有满足 Pod 调度需求的 Node 选出来。例如，PodFitsResources 过滤函数会检查候选 Node 的可用资源能否满足 Pod 的资源请求。在过滤之后，得出一个 Node 列表，里面包含了所有可调度节点；通常情况下，这个 Node 列表包含不止一个 Node。如果这个列表是空的，代表这个 Pod 不可调度。
+
+打分阶段：在过滤阶段后调度器会为 Pod 从所有可调度节点中选取一个最合适的 Node。根据当前启用的打分规则，调度器会给每一个可调度节点进行打分。最后，kube-scheduler 会将 Pod 调度到得分最高的 Node 上。如果存在多个得分最高的 Node，kube-scheduler 会从中随机选取一个。
+
+过滤阶段
+官方文档：
+https://kubernetes.io/docs/reference/scheduling/policies/
+
+在调度时的过滤阶段到底时通过什么规则来对Node进行过滤的呢？就是通过以下规则！
+
+1.PodFitsHostPorts：检查Node上是否不存在当前被调度Pod的端口（如果被调度Pod用的端口已被占用，则此Node被Pass）。
+
+2.PodFitsHost：检查Pod是否通过主机名指定了特性的Node (是否在Pod中定义了nodeName)
+
+3.PodFitsResources：检查Node是否有空闲资源(如CPU和内存)以满足Pod的需求。
+
+4.PodMatchNodeSelector：检查Pod是否通过节点选择器选择了特定的Node (是否在Pod中定义了nodeSelector)。
+
+5.NoVolumeZoneConflict：检查Pod请求的卷在Node上是否可用 (不可用的Node被Pass)。
+
+6.NoDiskConflict：根据Pod请求的卷和已挂载的卷，检查Pod是否合适于某个Node (例如Pod要挂载/data到容器中，Node上/data/已经被其它Pod挂载，那么此Pod则不适合此Node)
+
+7.MaxCSIVolumeCount：：决定应该附加多少CSI卷，以及是否超过了配置的限制。
+
+8.CheckNodeMemoryPressure：对于内存有压力的Node，则不会被调度Pod。
+
+9.CheckNodePIDPressure：对于进程ID不足的Node，则不会调度Pod
+
+10.CheckNodeDiskPressure：对于磁盘存储已满或者接近满的Node，则不会调度Pod。
+
+11.CheckNodeCondition：Node报告给API Server说自己文件系统不足，网络有写问题或者kubelet还没有准备好运行Pods等问题，则不会调度Pod。
+
+12.PodToleratesNodeTaints：检查Pod的容忍度是否能承受被打上污点的Node。
+
+13.CheckVolumeBinding：根据一个Pod并发流量来评估它是否合适（这适用于结合型和非结合型PVCs）。
+
+打分阶段
+官方文档：
+https://kubernetes.io/docs/reference/scheduling/policies/ 当过滤阶段执行后满足过滤条件的Node，将进行打分阶段。
+
+1.SelectorSpreadPriority：优先减少节点上属于同一个 Service 或 Replication Controller 的 Pod 数量
+
+
+2.InterPodAffinityPriority：优先将 Pod 调度到相同的拓扑上（如同一个节点、Rack、Zone 等）
+
+3.LeastRequestedPriority：节点上放置的Pod越多，这些Pod使用的资源越多，这个Node给出的打分就越低，所以优先调度到Pod少及资源使用少的节点上。
+
+4.MostRequestedPriority：尽量调度到已经使用过的 Node 上，将把计划的Pods放到运行整个工作负载所需的最小节点数量上。
+
+
+5.RequestedToCapacityRatioPriority：使用默认资源评分函数形状创建基于requestedToCapacity的
+ResourceAllocationPriority。
+
+
+6.BalancedResourceAllocation：优先平衡各节点的资源使用。
+
+
+7.NodePreferAvoidPodsPriority：根据节点注释对节点进行优先级排序，以使用它来提示两个不同的 Pod 不应在同一节点上运行。
+scheduler.alpha.kubernetes.io/preferAvoidPods。
+
+8.NodeAffinityPriority：优先调度到匹配 NodeAffinity （Node亲和性调度）的节点上。
+
+9.TaintTolerationPriority：优先调度到匹配 TaintToleration (污点) 的节点上
+
+10.ImageLocalityPriority：尽量将使用大镜像的容器调度到已经下拉了该镜像的节点上。
+
+
+11.ServiceSpreadingPriority：尽量将同一个 service 的 Pod 分布到不同节点上，服务对单个节点故障更具弹性。
+
+12.EqualPriority：将所有节点的权重设置为 1。
+
+13.EvenPodsSpreadPriority：实现首选pod拓扑扩展约束。
+
+kube-scheduler 调度示例
+默认配置使用的就是kube-scheduler调度组件，我们下面例子启动三个Pod，看分别被分配到哪个Node。
+
+
+
+在Kubernetes（k8s）的世界里，Pod是最基本的部署单元，它可能包含一个或多个容器。如何将这些Pod调度到集群中的适当节点上，是一个至关重要的问题。Kubernetes提供了多种调度策略，以确保Pods能够高效、稳定地运行。本文将详细介绍四种常见的Kubernetes Pod调度方式。
+
+回到顶部
+1. 默认调度
+默认调度是Kubernetes中最基础的调度方式。当一个Pod被创建时，如果没有指定任何特殊的调度指令，它将由Kubernetes调度器自动调度到集群中的某个节点上。调度器会考虑多个因素，如节点的资源使用情况（CPU、内存）、节点的选择器标签、污点和容忍度等，以找到一个最合适的节点。
+
+回到顶部
+2. 节点选择器（Node Selector）
+节点选择器是一种基于标签的调度方式。通过在Pod的定义中指定nodeSelector字段，可以指定一组键值对，这些键值对必须与目标节点的标签相匹配。这样，Pod只会被调度到具有相应标签的节点上。这种方式非常适合于那些需要特定硬件或软件环境的Pod。
+
+例如，如果你有一些节点安装了GPU，你可以为这些节点设置一个标签node-role.kubernetes.io/gpu: "true"。然后，你的Pod可以通过设置nodeSelector来指定它需要调度到带有GPU标签的节点上：
+
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/gpu: "true"
+回到顶部
+3. 污点与容忍度（Taints and Tolerations）
+污点和容忍度是一种更灵活的调度机制，它允许管理员对节点进行标记（污点），并定义Pod对这些污点的容忍度。通过这种方式，可以控制哪些Pod可以调度到特定的节点上。
+
+污点（Taints）：节点上的污点可以阻止没有相应容忍度的Pod被调度到该节点上。污点有三个效应：NoSchedule、PreferNoSchedule和NoExecute。
+容忍度（Tolerations）：Pod的容忍度定义了它能够容忍哪些污点，从而允许它被调度到带有这些污点的节点上。
+例如，如果你有一个节点被专门用于运行关键任务的Pod，你可以对这个节点添加一个污点：
+
+kubectl taint nodes node1 dedicated=special-user:NoSchedule
+然后，确保只有具有相应容忍度的Pod才能调度到这个节点：
+
+spec:
+  tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "special-user"
+    effect: "NoSchedule"
+回到顶部
+4. 亲和性与反亲和性（Affinity and Anti-affinity）
+亲和性与反亲和性提供了一种更高级的调度策略，允许Pod指定它们希望与之靠近或远离的节点或其他Pod。
+
+节点亲和性（Node Affinity）：允许Pod指定它们倾向于或必须调度到带有特定标签的节点上。
+Pod亲和性（Pod Affinity）：允许Pod指定它们倾向于与具有某些标签的其他Pod调度到同一节点上。
+Pod反亲和性（Pod Anti-affinity）：允许Pod指定它们不希望与具有某些标签的其他Pod调度到同一节点上。
+例如，如果你想要确保数据库的副本分布在不同的节点上以避免单点故障，可以使用Pod反亲和性：
+
+spec:
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: "app"
+            operator: "In"
+            values:
+            - "database"
+        topologyKey: "kubernetes.io/hostname"
+回到顶部
+总结
+Kubernetes的Pod调度是一个复杂而强大的功能，它提供了多种策略来满足不同的部署需求。从简单的默认调度到基于标签的选择器，再到复杂的亲和性和反亲和性规则，Kubernetes调度器帮助你确保Pods能够在最合适的节点上运行，从而优化资源利用率和应用性能。了解和掌握这些调度策略，对于任何Kubernetes用户来说都是提高集群性能和可靠性的关键。
+
+
+
+Pod调度之污点与容忍
+官方文档：
+https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#example-use-cases
+
+污点（taint）是定义在Node之上的键值型的数据，用于让节点拒绝将Pod调度运行于其上，除非该Pod对象具有接纳Node污点的容忍度。而容忍度（tolerations）是定义在Pod对象的键值型属性数据，用于·配置其可容忍的Node污点，而且调度器仅能将Pod对象调度至其能够容忍该Node污点的Node之上。
+
+
+Pod调度之节点亲和性调度
+官方文档：
+https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#node-affinity
+
+节点亲和性调度程序是用来确定Pod对象调度位置的一组规则，这些规则基于节点上的自定义标签和Pod对象上指定的标签选择器进行定义。
+
+节点亲和性允许Pod对象定义针对一组可以调度于其上的节点的亲和性或反亲和性，不过，它无法具体到某个特定的节点。例如将Pod调度至有着CPU的节点或者一个可用区域内的节点之上。定义节点亲和性规则时有两种类型的节点亲和性规则：
+
+1.硬亲和性（required）：硬亲和性实现的是强制性规则，它是Pod调度时必须要满足的规则，而在不存在满足规则的Node时，Pod对象会被置为Pending状态。
+
+2.软亲和性（preferred）：软亲和性规则实现的是一种柔性调度限制，它倾向于将Pod对象运行于某类特定节点之上，而调度器也将尽量满足此需求，但在无法满足需求时它将退而求其次地选择一个不匹配规则的节点之上。
+
+定义节点亲和性规则的关键点有两个：
+
+1.为节点配置合乎需求的标签。
+
+2.为Pod对象定义合理的标签选择器，从而能够基于标签选择器选择出符合需求的标签。
+
+不过，如
+requiredDuringSchedulingIgnoredDuringExecution和
+preferredDuringSchedulingIgnoredDuringExecution名字中的后半段字符串IgnoredDuringExecution隐藏的意义所指，在Pod资源基于节点亲和性规则调度至某节点之后，节点标签发生了改变而不在符合此类节点亲和性规则时，调度器不会将Pod对象从此节点移除，因为它仅对新建的Pod对象生效。
+
+
