@@ -1,0 +1,17 @@
+销毁一个Pod的流程
+Pod 设置为Terminating状态，并从所有服务的Endpoints列表中删除
+此时，Pod停止停止，但是Pod中运行的容器不受影响
+PreStop Hook被执行
+preStop Hook发送容器特殊命令或者Http请求到Pod中，Pod应用程序在接收SIGTERM(该SIGTERM信号是用于导致程序终止的通用信号。不同于SIGKILL，该信号可以被阻止，处理和忽略。这是礼貌地要求程序终止的正常方法)，如果使用第三方代码或者管理系统无法控制，则preStop Hook是在不修改应用程序的情况下触发
+SIGTERM信号发送给Pod
+此时，Kubernetes将向Pod中的容器发送SIGTERM信号，这个信号即通知容器他们很快将进行关闭。
+Kubernetes等待优雅的终止
+此时，Kubernetes等待指定的时间称为优雅终止宽限期。默认情况下，这是30秒(可以修改)，值得注意的是，PreStop Hook和SIGTREM信息是属于并行执行，Kubernetes不会等待PreStop Hook完成。
+注：
+如果Pod在terminationGracePeriod完成之前推出，Kubernetes将进如释放阶段，如果容器在优雅终止宽限期(terminationGracePeriod限定时间)，则会发送SIGKILL信号并强制删除。与此同时，所有的Kubernetes对象也会被清除
+
+大家在上面可以看出未列出的组件，原因如下：
+controller-manager：pod是直接由kubelet创建的，没有经过调度器，而controller-manager是负责控制器管理的，例如创建deployment等，才会经过controller-manager；
+
+kube-proxy：负责service网络的实现，访问service时会转发到pod；因为在创建pod时没有创建service 所以kube-proxy在这个架构中也没有干预进来；
+————————————
