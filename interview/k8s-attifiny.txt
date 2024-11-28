@@ -1,0 +1,278 @@
+Pod调度之节点亲和性调度
+官方文档：
+https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#node-affinity
+
+节点亲和性调度程序是用来确定Pod对象调度位置的一组规则，这些规则基于节点上的自定义标签和Pod对象上指定的标签选择器进行定义。
+
+节点亲和性允许Pod对象定义针对一组可以调度于其上的节点的亲和性或反亲和性，不过，它无法具体到某个特定的节点。例如将Pod调度至有着CPU的节点或者一个可用区域内的节点之上。定义节点亲和性规则时有两种类型的节点亲和性规则：
+
+1.硬亲和性（required）：硬亲和性实现的是强制性规则，它是Pod调度时必须要满足的规则，而在不存在满足规则的Node时，Pod对象会被置为Pending状态。
+
+2.软亲和性（preferred）：软亲和性规则实现的是一种柔性调度限制，它倾向于将Pod对象运行于某类特定节点之上，而调度器也将尽量满足此需求，但在无法满足需求时它将退而求其次地选择一个不匹配规则的节点之上。
+
+定义节点亲和性规则的关键点有两个：
+
+1.为节点配置合乎需求的标签。
+
+2.为Pod对象定义合理的标签选择器，从而能够基于标签选择器选择出符合需求的标签。
+
+不过，如
+requiredDuringSchedulingIgnoredDuringExecution和
+preferredDuringSchedulingIgnoredDuringExecution名字中的后半段字符串IgnoredDuringExecution隐藏的意义所指，在Pod资源基于节点亲和性规则调度至某节点之后，节点标签发生了改变而不在符合此类节点亲和性规则时，调度器不会将Pod对象从此节点移除，因为它仅对新建的Pod对象生效。
+
+
+
+节点硬亲和性
+节点硬亲和性类似于Pod对象使用nodeSelector属性可以基于节点标签匹配的方式将Pod对象调度至某一个节点之上。不过它仅能基于简单的等值关系定义标签选择器，而nodeAffinity中支持使用matchExpressions属性构建更为复杂的标签选择机制。
+
+节点硬亲和性参数解析：
+
+•nodeSelectorTerms：节点选择列表（比nodeSelector高级一点）。
+
+•matchExpressions：按照节点label列出节点选择器列表。（与matchFields是两种方式，不过结果是一至）
+
+•matchFields：按照节点字段列出节点选择器列表。（与matchExpressions是两种方式，不过结果是一至）
+
+•key：指定要选择节点label的key。
+
+•values：指定要选择节点label的value，值必须为数组 [“value”] ，如果操作符为In或者 Notin,value则不能为空，如果操作符为Exists或者DoesNotExist ，value则必须为空[],如果操作符为Gt或Lt，则value必须有单个元素，该元素将被解释为整数。
+
+•operator：操作符，指定key与value的关系。
+
+•In：key与value同时存在，一个key多个value的情况下，value之间就成了逻辑或效果。
+
+•NotIn：label 的值不在某个列表中。
+
+•Exists：只判断是否存在key，不用关心value值是什么。
+
+•DoesNotExist：某个 label 不存在。
+
+•Gt：label 的值大于某个值。
+
+•Lt：label 的值小于某个值
+
+1.为Node打上标签
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: required-nodeaffinity-deploy
+  labels:
+    type: required-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: required-nodeaffinity-pod
+  template:
+    metadata:
+      labels:
+        app: required-nodeaffinity-pod
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - { key: zone, operator: In, values: ["foo"] }
+      containers:
+      - name: myapp
+        image: busybox:latest
+        command: ["/bin/sh", "-c", "tail -f /etc/passwd"]
+
+
+
+
+节点软亲和性
+节点软亲和性为节点选择机制提供了一种柔性控逻辑，当调度的Pod对象不再是”必须”，而是“应该”放置于某些特性节点之上，当条件不满足时，它也能够接受编排于其它不符合条件的节点之上，另外，它还为每种倾向性提供了weight属性以便用户定义其优先级，取值范围是1-100，数字越大优先级越高。
+
+节点软亲和性参数解析：
+
+•preference：节点选择器，与相应的权重相关联。
+
+•weight：在1-100范围内，与匹配相应的节点选项相关联的权重。
+
+•matchExpressions：按照节点label列出节点选择器列表。（与matchFields是两种方式，不过结果是一至）
+
+•matchFields：按照节点字段列出节点选择器列表。（与matchExpressions是两种方式，不过结果是一至）
+
+•key：指定要选择节点label的key。
+
+•values：指定要选择节点label的value，值必须为数组 [“value”] ，如果操作符为In或者 Notin,value则不能为空，如果操作符为Exists或者DoesNotExist ，value则必须为空[“”],如果操作符为Gt或Lt，则value必须有单个元素，该元素将被解释为整数。
+
+•operator：操作符，指定key与value的关系。
+
+•In：key与value同时存在，一个key多个value的情况下，value之间就成了逻辑或效果。
+
+•NotIn：label 的值不在某个列表中。
+
+•Exists：只判断是否存在key，不用关心value值是什么。
+
+•DoesNotExist：某个 label 不存在。
+
+•Gt：label 的值大于某个值。
+
+•Lt：label 的值小于某个值
+
+
+1.创建Pod资源配置清单 如下示例中，Pod模版定义了Node软亲和性运行在标签key为zone和values为foo或bar上，以及key为ssd(值无需担心是什么)的Node之上，符合以下需求的是Node01和Node03，但是如下第一个条件key为zoo的权重为60，而key为ssd的为30，所以第一个条件的权重要比第二个条件的权重高一倍，我们下面运行了3个Pod，调度器应该会在Node01上分配两个Pod，Node03上分配1个Pod。
+
+cat preferred-nodeAffinitt-pod.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preferred-nodeaffinity-deploy
+  labels:
+    type: preferred-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: preferred-nodeaffinity-pod
+  template:
+    metadata:
+      labels:
+        app: preferred-nodeaffinity-pod
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 60
+            preference:
+              matchExpressions:
+              - { key: zone, operator: In, values: ["foo","bar"] }
+          - weight: 30
+            preference:
+              matchExpressions:
+              - { key: ssd, operator: Exists, values: [] }
+      containers:
+      - name: myapp
+        image: busybox:latest
+        command: ["/bin/sh", "-c", "tail -f /etc/passwd"]
+
+
+
+
+
+
+
+Pod调度之Pod亲和性调度
+podAffinity介绍
+
+出于高效通信的需求，我们要把几个Pod对象运行在比较近的位置，例如APP Pod与DB Pod,我们的APP Pod需要连接DB Pod，这个时候就需要把这两个Pod运行在较近的位置以便于网络通信，一般可以按照区域、机房、地区等来划分。像这种类型就属于Pod的亲和性调度。但是有时候出于安全或者分布式考虑，也有可能将Pod运行在不同区域、不同机房，这个时候Pod的关系就是为反亲和性。
+
+podAffinity也被分为硬亲和性和软亲和性，其原理与Node中的硬亲和性及软亲和性一致。
+
+硬亲和性（required）：硬亲和性实现的是强制性规则，它是Pod调度时必须要满足的规则，而在不存在满足规则的Node时，Pod对象会被置为Pending状态。
+
+软亲和性（preferred）：软亲和性规则实现的是一种柔性调度限制，它倾向于将Pod对象运行于某类特定节点之上，而调度器也将尽量满足此需求，但在无法满足需求时它将退而求其次地选择一个不匹配规则的节点之上。
+
+定义Pod亲和性规则的关键点有两个：
+
+1.为节点配置合乎需求的标签。
+
+2.为Pod对象定义合理的标签选择器labelSelector，从而能够基于标签选择器选择出符合需求的标签。
+
+
+
+Pod反亲和硬亲和性
+Pod硬亲和性调度使用
+requiredDuringSchedulingIgnoredDuringExecution属性进行定义，Pod硬亲和性使用topologyKey参数来指定要运行在具备什么样标签key的Node上，然后再通过labelSelector选择你想关联Pod的标签，可能有点绕，下面看示例应该就明白了。
+
+
+Pod硬亲和性参数解析：
+
+•labelSelector：标签选择器️。
+
+•topologyKey：指定要将当前创建Pod运行在具备什么样的Node标签上，通常指定Node标签的Key。
+
+•namespaces：指定labelSelector应用于哪个名称空间，null或空列表表示“此pod的名称空间”。
+
+•matchExpressions：按照Pod label列出节点选择器列表。（与matchLabels是两种方式，不过结果是一至）。
+
+•matchLabels：按照节点字段列出节点选择器列表。（与matchExpressions是两种方式，不过结果是一至）。
+
+•key：指定要选择节点label的key。
+
+•values：指定要选择节点label的value，值必须为数组 [“value”] ，如果操作符为In或者 Notin,value则不能为空，如果操作符为Exists或者DoesNotExist ，value则必须为空[],如果操作符为Gt或Lt，则value必须有单个元素，该元素将被解释为整数。
+
+•operator：操作符，指定key与value的关系。
+
+•In：key与value同时存在，一个key多个value的情况下，value之间就成了逻辑或效果。
+
+•NotIn：label 的值不在某个列表中。
+
+•Exists：只判断是否存在key，不用关心value值是什么。
+
+•DoesNotExist：某个 label 不存在。
+
+•Gt：label 的值大于某个值。
+
+•Lt：label 的值小于某个值
+
+
+Pod软亲和性
+Pod软亲和性使用
+preferredDuringSchedulingIgnoredDuringExecution属性进行定义，Pod软亲和性使用podAffinityTerm属性来挑选Pod标签，当调度的Pod对象不再是”必须”，而是“应该”放置于某些特性节点之上，当条件不满足时，它也能够接受编排于其它不符合条件的节点之上，另外，它还为每种倾向性提供了weight属性以便用户定义其优先级，取值范围是1-100，数字越大优先级越高。
+
+
+
+Pod软亲和性参数解析：
+
+•podAffinityTerm：Pod亲和性选择器。
+
+•weight：在1-100范围内，与匹配相应的节点选项相关联的权重。
+
+•labelSelector：标签选择器。
+
+•matchExpressions：按照Pod label列出节点选择器列表。（与matchLabels是两种方式，不过结果是一至）。
+
+•matchLabels：按照节点字段列出节点选择器列表。（与matchExpressions是两种方式，不过结果是一至）。
+
+•key：指定要选择节点label的key。
+
+•values：指定要选择节点label的value，值必须为数组 [“value”] ，如果操作符为In或者 Notin,value则不能为空，如果操作符为Exists或者DoesNotExist ，value则必须为空[],如果操作符为Gt或Lt，则value必须有单个元素，该元素将被解释为整数。
+
+•operator：操作符，指定key与value的关系。
+
+•In：key与value同时存在，一个key多个value的情况下，value之间就成了逻辑或效果
+
+•NotIn：label 的值不在某个列表中。
+
+•Exists：只判断是否存在key，不用关心value值是什么。
+
+•DoesNotExist：某个 label 不存在。
+
+•Gt：label 的值大于某个值。
+
+•Lt：label 的值小于某个值
+
+
+Pod调度之污点与容忍
+官方文档：
+https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/#example-use-cases
+
+污点（taint）是定义在Node之上的键值型的数据，用于让节点拒绝将Pod调度运行于其上，除非该Pod对象具有接纳Node污点的容忍度。而容忍度（tolerations）是定义在Pod对象的键值型属性数据，用于·配置其可容忍的Node污点，而且调度器仅能将Pod对象调度至其能够容忍该Node污点的Node之上。
+
+回到顶部
+3. 污点与容忍度（Taints and Tolerations）
+污点和容忍度是一种更灵活的调度机制，它允许管理员对节点进行标记（污点），并定义Pod对这些污点的容忍度。通过这种方式，可以控制哪些Pod可以调度到特定的节点上。
+
+污点（Taints）：节点上的污点可以阻止没有相应容忍度的Pod被调度到该节点上。污点有三个效应：NoSchedule、PreferNoSchedule和NoExecute。
+容忍度（Tolerations）：Pod的容忍度定义了它能够容忍哪些污点，从而允许它被调度到带有这些污点的节点上。
+例如，如果你有一个节点被专门用于运行关键任务的Pod，你可以对这个节点添加一个污点：
+
+2. 节点选择器（Node Selector）
+节点选择器是一种基于标签的调度方式。通过在Pod的定义中指定nodeSelector字段，可以指定一组键值对，这些键值对必须与目标节点的标签相匹配。这样，Pod只会被调度到具有相应标签的节点上。这种方式非常适合于那些需要特定硬件或软件环境的Pod。
+
+例如，如果你有一些节点安装了GPU，你可以为这些节点设置一个标签node-role.kubernetes.io/gpu: "true"。然后，你的Pod可以通过设置nodeSelector来指定它需要调度到带有GPU标签的节点上：
+
+
+
+4. 亲和性与反亲和性（Affinity and Anti-affinity）
+亲和性与反亲和性提供了一种更高级的调度策略，允许Pod指定它们希望与之靠近或远离的节点或其他Pod。
+
+节点亲和性（Node Affinity）：允许Pod指定它们倾向于或必须调度到带有特定标签的节点上。
+Pod亲和性（Pod Affinity）：允许Pod指定它们倾向于与具有某些标签的其他Pod调度到同一节点上。
+Pod反亲和性（Pod Anti-affinity）：允许Pod指定它们不希望与具有某些标签的其他Pod调度到同一节点上。
+例如，如果你想要确保数据库的副本分布在不同的节点上以避免单点故障，可以使用Pod反亲和性：
