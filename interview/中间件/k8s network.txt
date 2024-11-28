@@ -1,5 +1,41 @@
 Kubernetes中网络通信可以分为Pod-to-Pod通信、Pod-to-Service通信以及Ingress通信（从外部流量到集群内部）。
 
+2 Pod 间通信
+同节点 pod 间通信
+
+由于 Pod 内共享网络命名空间（由 pause 容器创建），所以本质上也是同节点容器间的通信。同时，同一 Node 中 Pod 的默认路由都是 docker0 的地址，由于它们关联在同一个 docker0 网桥上，地址网段相同，所有它们之间应当是能直接通信的。来看看实际上这一过程如何实现。如上图，Pod1 中容器 1和容器 2 共享网络命名空间，因此对pod 外的请求通过 pod1 和 Docker0 网桥的 veth对（图中挂在eth0和ethx上）实现。
+
+
+跨节点通信
+
+CNI：容器网络接口
+
+CNI 是一种标准，它旨在为容器平台提供网络的标准化。不同的容器平台（比如目前的 kubernetes、mesos 和 rkt）能够通过相同的接口调用不同的网络组件。
+
+目前kubernetes支持的CNI组件种类很多，例如：bridge calico calico-ipam dhcp flannel host-local ipvlan loopback macvlan portmap ptp sample tuning vlan。在docker中，主流的跨主机通信方案主要有一下几种：
+
+1）基于隧道的overlay网络：按隧道类型来说，不同的公司或者组织有不同的实现方案。docker原生的overlay网络就是基于vxlan隧道实现的。ovn则需要通过geneve或者stt隧道来实现的。flannel最新版本也开始默认基于vxlan实现overlay网络。
+
+2）基于包封装的overlay网络：基于UDP封装等数据包包装方式，在docker集群上实现跨主机网络。典型实现方案有weave、flannel的早期版本。
+
+3）基于三层实现SDN网络：基于三层协议和路由，直接在三层上实现跨主机网络，并且通过iptables实现网络的安全隔离。典型的方案为Project Calico。同时对不支持三层路由的环境，Project Calico还提供了基于IPIP封装的跨主机网络实现
+
+
+集群内跨节点通信涉及到不同的子网间通信，仅靠docker0无法实现，这里需要借助CNI网络插件来实现。图中展示了使用flannel实现跨节点通信的方式。
+
+简单说来，flannel的用户态进程flanneld会为每个node节点创建一个flannel.1的网桥，根据etcd或apiserver的全局统一的集群信息为每个node分配全局唯一的网段，避免地址冲突。同时会为docker0和flannel.1创建veth对，docker0将报文丢给flannel.1,。
+
+Flanneld维护了一份全局node的网络表，通过flannel.1接收到请求后，根据node表，将请求二次封装为UDP包，扔给eth0，由eth0出口进入物理网路发送给目的node。
+
+在另一端以相反的流程。Flanneld解包并发往docker0，进而发往目的Pod中的容器。
+
+外部访问集群
+从集群外访问集群有多种方式，比如loadbalancer，Ingress，nodeport，nodeport和loadbalancer是service的两个基本类型，是将service直接对外暴露的方式，ingress则是提供了七层负载均衡，其基本原理将外部流量转发到内部的service，再转发到后端endpoints，在平时的使用中，我们可以依据具体的业务需求选用不同的方式。这里主要介绍nodeport和ingress方式。
+
+Nodeport
+通过将 Service 的类型设置为 NodePort，就可以在 Cluster 中的主机上通过一个指定端口暴露服务。注意通过 Cluster 中每台主机上的该指定端口都可以访问到该服务，发送到该主机端口的请求会被 Kubernetes 路由到提供服务的 Pod 上。采用这种服务类型，可以在 Kubernetes cluster 网络外通过主机 IP：端口的方式访问到服务。
+
+
 2.1 Pod-to-Pod通信
 同节点通信：
 同一节点上的Pod通过veth pair和网桥直接通信。
