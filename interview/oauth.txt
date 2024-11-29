@@ -1,0 +1,99 @@
+1. 常用身份验证协议
+(1) OAuth 2.0
+用途：授权协议，允许用户在无需暴露凭据（如密码）的情况下，让第三方应用访问用户资源。
+特点：
+用户通过登录授权后，第三方应用获取访问令牌。
+广泛用于登录和授权（如单点登录 SSO）。
+支持 PKCE（Proof Key for Code Exchange），增强安全性。
+典型场景：
+社交媒体登录（Google、Facebook、GitHub 等第三方登录）。
+微服务间授权和令牌分发。
+(2) OpenID Connect (OIDC)
+用途：基于 OAuth 2.0 的身份认证协议，用于验证用户身份。
+特点：
+在 OAuth 2.0 的基础上扩展，用于身份验证。
+返回一个 ID Token，包含用户身份信息。
+支持单点登录（SSO）。
+典型场景：
+企业统一身份认证。
+B2B 应用认证。
+(3) SAML (Security Assertion Markup Language)
+用途：基于 XML 的协议，用于在不同的组织或应用之间传递认证和授权数据。
+特点：
+广泛用于企业的单点登录（SSO）。
+通过 SAML 断言（Assertion）传递用户身份和授权信息。
+典型场景：
+企业内部应用登录。
+跨组织的身份认证（如供应商门户）。
+(4) LDAP (Lightweight Directory Access Protocol)
+用途：用于访问目录服务，例如用户信息和身份验证。
+特点：
+通常配合 Active Directory 使用。
+支持用户和组的分层管理。
+典型场景：
+企业内部认证。
+用户管理和目录查询。
+(5) Kerberos
+用途：网络身份验证协议，用于对用户和服务之间的通信进行安全验证。
+特点：
+采用对称加密技术，通过票证（Ticket）验证身份。
+减少重复认证。
+典型场景：
+大型企业内部网络认证。
+Windows Active Directory 环境。
+(6) Multi-Factor Authentication (MFA)
+用途：增强安全性，通过多种验证方式确认用户身份。
+常用方式：
+密码 + 动态验证码（如 Google Authenticator、短信）。
+密码 + 生物识别（如指纹、人脸识别）。
+典型场景：
+高敏感业务登录（银行账户、管理系统）。
+(7) RADIUS (Remote Authentication Dial-In User Service)
+用途：集中身份认证和授权服务。
+特点：
+常用于远程网络接入。
+支持网络设备认证。
+典型场景：
+远程办公 VPN 登录。
+企业 Wi-Fi 网络访问控制。
+2. 配置身份验证登录的典型流程
+选择协议和框架
+
+根据业务场景选择协议（OAuth 2.0、OIDC、SAML）。
+配置所需的身份提供者（IdP）和服务提供者（SP）。
+搭建身份提供者（IdP）
+
+使用现有的身份提供商（如 AWS Cognito、Azure AD、Okta、Google Identity）。
+企业内部部署 IdP（如 Keycloak、Ping Identity）。
+集成认证机制
+
+前端：
+配置 OAuth/OIDC 登录按钮（跳转到授权页面）。
+后端：
+实现回调处理，验证返回的授权码或 Token。
+安全增强
+
+启用多因素认证（MFA）。
+使用 HTTPS 确保传输加密。
+启用 IP 白名单、设备信任机制。
+测试和部署
+
+测试认证流，确保 Token 的有效性和权限。
+部署到生产环境，并设置监控。
+3. 常用工具和服务
+单点登录（SSO）服务：
+
+Okta
+Auth0
+Ping Identity
+Azure Active Directory
+开源解决方案：
+
+Keycloak
+Gluu
+WSO2 Identity Server
+云认证服务：
+
+AWS Cognito
+Google Identity Platform
+Microsoft Azure B2C
