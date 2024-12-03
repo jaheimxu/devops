@@ -1,0 +1,56 @@
+公有网络和私有网络区别
+
+在 AWS 中，公有网络（Public Network）和私有网络（Private Network）是通过 VPC（Virtual Private Cloud） 内的网络组件和配置来区分的。具体来说，通过以下几个关键因素来区分公有网络和私有网络：
+
+1. 子网（Subnet）
+公有子网（Public Subnet）：公有子网是指能够与互联网通信的子网。通常，公有子网中的资源（如 EC2 实例）可以直接访问互联网。
+关键特征：公有子网中的实例需要拥有 弹性IP（Elastic IP） 或者通过 NAT 网关/实例 进行互联网访问。
+公有子网的实例通常部署在具有 Internet Gateway 连接的子网中，Internet Gateway 允许子网中的资源访问互联网。
+私有子网（Private Subnet）：私有子网是指不能直接与互联网通信的子网。通常，私有子网中的资源需要通过 NAT 网关 或 NAT 实例 等中介来访问外部互联网。
+关键特征：私有子网中的实例没有 弹性 IP，也没有直接的 Internet Gateway。如果需要访问互联网，流量会通过 NAT 实例或 NAT 网关进行转发。
+如何区分：
+
+公有子网：连接到 Internet Gateway，能够直接访问互联网。
+私有子网：没有直接连接到 Internet Gateway，且通常只能通过其他资源（如 NAT 网关、VPN 等）访问外部。
+2. Internet Gateway（IGW）
+Internet Gateway（IGW） 是 AWS 中的一种可用资源，用于允许 VPC 中的公有子网与互联网通信。
+如果子网与 Internet Gateway 连接，并且 VPC 路由表中的 0.0.0.0/0 路由指向这个 Internet Gateway，那么该子网被视为公有子网。
+如何区分：
+
+公有子网：VPC 中的路由表将流量指向 Internet Gateway。
+私有子网：没有与 Internet Gateway 的连接，所有流量需要通过 NAT 设备进行外部通信。
+
+
+aws vpc peers 对应阿里云的什么产品
+
+AWS VPC Peering 对应阿里云的 VPC Peering Connection 产品。两者提供相似的功能，允许不同的虚拟私有云（VPC）之间建立私有网络连接，实现跨 VPC 的通信。下面是两者的详细对比：
+
+1. VPC Peering 连接
+AWS VPC Peering：
+
+AWS VPC Peering 允许你连接两个 VPC 使它们之间的资源能够通过私有 IP 地址进行通信。
+可以是同一区域内的 VPC 之间的连接，也可以是跨区域（跨 Region）VPC 连接。
+支持 VPC 内部的路由器自动配置，但需要手动配置路由表和安全组。
+连接是点对点的，流量不会通过公共互联网。
+阿里云 VPC Peering Connection：
+
+阿里云的 VPC Peering 也允许你连接两个不同的 VPC，使它们之间的资源能够通过私有 IP 地址进行通信。
+支持同一区域内的 VPC 连接，以及不同区域（跨 Region）的 VPC 连接。
+与 AWS VPC Peering 相似，阿里云的 VPC Peering 也需要手动配置路由表和安全组，以允许流量流动。
+支持点对点的连接，确保数据传输的安全性和隐私性。
+2. 区别
+支持跨账户连接：
+
+AWS VPC Peering：支持在同一账户内以及跨账户的 VPC Peering。跨账户的 VPC Peering 需要设置账户的授权。
+阿里云 VPC Peering：阿里云 VPC Peering 也支持跨账户连接，但需要在配置过程中明确授权允许跨账户的连接。
+跨区域支持：
+
+AWS VPC Peering：AWS VPC Peering 支持跨区域连接，但需要额外配置，并且流量传输可能会产生额外费用。
+阿里云 VPC Peering：阿里云同样支持跨区域的 VPC Peering，允许不同区域的 VPC 实现互联。
+路由配置：
+
+AWS VPC Peering：需要手动修改路由表来允许不同 VPC 之间的流量。
+阿里云 VPC Peering：同样需要手动修改路由表，确保 VPC 之间的通信能够正常工作。
+带宽与延迟：
+
+两者都提供高带宽和低延迟的连接，适合大规模的网络流量和高性能应用。
