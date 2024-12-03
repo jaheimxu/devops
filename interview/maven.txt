@@ -1,0 +1,14 @@
+跳过测试的命令
+mvn clean install -DskipTests
+
+
+mvn clean 是什么
+mvn clean 是 Maven 的一个常用命令，它用于 清理 项目，删除构建过程中产生的文件和目录，特别是删除 target 目录中的所有内容。
+
+作用：
+删除 target/ 目录：Maven 会在项目的根目录下创建一个名为 target/ 的目录，这个目录用于存放编译生成的文件、打包后的构件（例如 JAR、WAR 文件）和临时文件。mvn clean 命令会删除该目录及其所有内容。
+确保干净的构建：通过清理项目，可以确保每次构建都从干净的状态开始，避免旧的文件影响到新的构建过程。
+
+maven 打包是什么命令
+
+mvn package
